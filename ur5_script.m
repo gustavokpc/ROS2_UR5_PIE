@@ -6,9 +6,9 @@ password = 'student';
 ROS2Folder = '/opt/ros/humble';
 ROS2Workspace = '/opt/ros/humble'; % In case of binary installation, ROS 2 Work-space is same as ROS 2 Folder
 
-ROS2DeviceAddress = '192.168.131.31';
+ROS2DeviceAddress = '147.250.35.73';
 
-robotAddress = '192.168.131.40'; 
+robotAddress = '147.250.35.40'; 
 
 device = ros2device(ROS2DeviceAddress,username,password);
 device.ROS2Folder = ROS2Folder;device.ROS2Workspace = ROS2Workspace;
@@ -25,7 +25,7 @@ addBody(ur5, tcp, 'tool0');
 
 ur = urROS2Node('RigidBodyTree',ur5);
 
-home = [0   0   -1.5708   0    0.1914    1.0011];
+home = [0   0   -1.5708   0    0.2515   1.0011];
 
 jointHome = [0   -1.5708   0   -1.5709    0   0];
 
@@ -74,8 +74,6 @@ qSol_tcp = wrapToPi(qSol_tcp);
 
 % --- Results ---
 disp("qSol (joint angles, rad):");
-disp(qSol_tool0);
-
 disp(qSol_tcp);
 
 disp("Cartesian values tool0")
