@@ -47,62 +47,21 @@ pub = ros2publisher(rosNode, ...
     "/robot_pose", ...
     "geometry_msgs/Transform");
 
-msg = ros2message(pub);
-
-timerObj = timer( ...
-    'ExecutionMode','fixedRate', ...
-    'Period',0.3, ... % 10 Hz
-    'TimerFcn',@(~,~) publishPose(ctx, pub));
-
-% start(timerObj);
-
 jointHome = [0   -1.5708   0   -1.5709    0   0]; %sendJointConfiguration(ctx.ur,jointHome,'EndTime',5);
 
 disp("Subscriber ready. Aceitando ponto novo a cada 3s.");
 disp("Aperte Enter para enviar o robô ao último ponto aceito.");
 
+figure;
+set(gcf, 'KeyPressFcn', @(src,event) keyCallback(event, ctx));
 
 while true
-    % --- LOOP: manda só quando apertar Enter ---
-    input("Enter = enviar para o último ponto | Ctrl+C = sair ", "s");
 
-    shared = evalin("base","shared");
+    % --- publish sempre ---
+    publishPose(ctx, pub);
 
-    if isempty(shared.lastP)
-        disp("Ainda não tenho nenhum ponto (ou ainda não passou 3s).");
-        continue;
-    end
+    pause(0.05); % ~20 Hz
 
-    if shared.locked
-        disp("Robô ainda executando o último comando.");
-        continue;
-    end
-
-    shared.locked = true;
-    assignin("base","shared",shared);
-
-    p = shared.lastP;
-    disp("Enviando robô para:");
-    disp(p);
-
-    [qSol, info] = computeIK_UR5(ctx, p);
-
-    if isfield(info,"ExitFlag") && info.ExitFlag <= 0
-        disp("IK falhou. Não vou mandar comando.");
-    else
-
-        % DESCOMENTE para mover de verdade:
-        sendJointConfigurationAndWait(ctx.ur, qSol, 'EndTime',10);
-        pause(3); % teste
-        % setToolOutput(ioClient, 1.0);
-        % pause(2);
-        % setToolOutput(ioClient, 0.0);
-
-    end
-
-    shared = evalin("base","shared");
-    shared.locked = false;
-    assignin("base","shared",shared);
 end
 
 % ---------------- CALLBACK SUBSCRIBER----------------
@@ -149,10 +108,50 @@ function publishPose(ctx, pub)
     msg.translation.z = round(p(6), 4);
 
     quat = eul2quat([p(1) p(2) p(3)]);
-    msg.rotation.w = quat(1);
-    msg.rotation.x = quat(2);
-    msg.rotation.y = quat(3);
-    msg.rotation.z = quat(4);
+    msg.rotation.w = round(quat(1), 4);
+    msg.rotation.x = round(quat(2), 4);
+    msg.rotation.y = round(quat(3), 4);
+    msg.rotation.z = round(quat(4), 4);
 
     send(pub, msg);
+end
+
+function keyCallback(event, ctx)
+
+    if strcmp(event.Key, 'return')
+
+        disp("ENTER pressionado!");
+
+        shared = evalin("base","shared");
+
+        if isempty(shared.lastP)
+            disp("Ainda não tenho ponto.");
+            return;
+        end
+
+        if shared.locked
+            disp("Robô ocupado.");
+            return;
+        end
+
+        shared.locked = true;
+        assignin("base","shared",shared);
+
+        p = shared.lastP;
+        disp("Enviando robô para:");
+        disp(p);
+
+        [qSol, info] = computeIK_UR5(ctx, p);
+
+        if isfield(info,"ExitFlag") && info.ExitFlag > 0
+            sendJointConfigurationAndWait(ctx.ur, qSol, 'EndTime',10);
+        else
+            disp("IK falhou.");
+        end
+
+        shared = evalin("base","shared");
+        shared.locked = false;
+        assignin("base","shared",shared);
+    end
+
 end

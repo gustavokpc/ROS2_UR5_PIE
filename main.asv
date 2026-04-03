@@ -20,7 +20,7 @@ rosNode = ros2node("/matlab_ur5_node");
 % --- Cliente para IO (Tool Output) ---
 ioClient = ros2svcclient(rosNode, ...
     "/io_and_status_controller/set_io", ...
-    "ur_msgs/SetIO");
+    "ur_msgs/SetIO"m);
 
 
 waitForServer(ioClient);
@@ -35,13 +35,13 @@ tic; % relógio pra throttle
 
 % Subscriber: só armazena (com throttle de 3s)
 
-% SUB CAGE
-sub = ros2subscriber(rosNode, "/erreur_bras", "geometry_msgs/Transform", ...
-    @(msg) storePointThrottled(msg));
-
-% %SUB CAMERA
-% sub = ros2subscriber(rosNode, "/object_positions", "geometry_msgs/Point", ...
+%SUB CAGE
+% sub = ros2subscriber(rosNode, "/instruction_cage", "geometry_msgs/Transform", ...
 %     @(msg) storePointThrottled(msg));
+
+%SUB CAMERA
+sub = ros2subscriber(rosNode, "/object_positions", "geometry_msgs/Point", ...
+    @(msg) storePointThrottled(msg));
 
 pub = ros2publisher(rosNode, ...
     "/robot_pose", ...
@@ -54,7 +54,7 @@ timerObj = timer( ...
     'Period',0.3, ... % 10 Hz
     'TimerFcn',@(~,~) publishPose(ctx, pub));
 
-% start(timerObj);
+start(timerObj);
 
 jointHome = [0   -1.5708   0   -1.5709    0   0]; %sendJointConfiguration(ctx.ur,jointHome,'EndTime',5);
 
@@ -114,13 +114,13 @@ function storePointThrottled(msg)
         return; % ignora até completar 3s
     end
 
-    x = msg.translation.x;
-    y = msg.translation.y;
-    z = msg.translation.z;
+    % x = msg.translation.x;
+    % y = msg.translation.y;
+    % z = msg.translation.z;
     
-    % x = msg.x;
-    % y = msg.y;
-    % z = msg.z;
+    x = msg.x;
+    y = msg.y;
+    z = msg.z;
 
     shared.lastP = [x y z];
     shared.lastUpdate = t;
@@ -131,7 +131,7 @@ function storePointThrottled(msg)
     disp(shared.lastP);
 end
 
-% % ---------------- "CALLBACK" PUBLISHER----------------
+% ---------------- "CALLBACK" PUBLISHER----------------
 function publishPose(ctx, pub)
 
     msg = ros2message(pub);
@@ -148,11 +148,10 @@ function publishPose(ctx, pub)
     msg.translation.y = round(p(5), 4);
     msg.translation.z = round(p(6), 4);
 
-    quat = eul2quat([p(1) p(2) p(3)]);
-    msg.rotation.w = quat(1);
-    msg.rotation.x = quat(2);
-    msg.rotation.y = quat(3);
-    msg.rotation.z = quat(4);
+    msg.rotation.w = 0.0;
+    msg.rotation.x = round(p(3), 4);
+    msg.rotation.y = round(p(2), 4);
+    msg.rotation.z = round(p(1), 4);
 
     send(pub, msg);
 end

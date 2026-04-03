@@ -19,7 +19,7 @@ function ctx = setupUR5()
     jnt = rigidBodyJoint('tcp_fixed','fixed');
     
     % offset tool0 -> ponta da garra
-    offset = trvec2tform([0 0 0.06]);  % <-- troque pelo valor real
+    offset = trvec2tform([0 0 0.21]);  % <-- troque pelo valor real
     setFixedTransform(jnt, offset);
     
     tcp.Joint = jnt;
@@ -33,6 +33,4 @@ function ctx = setupUR5()
     % Parâmetros fixos
     ctx.eeName = "tcp";
     ctx.weights = [1 1 1 1 1 1];
-
-    jointHome = [0   -1.5708   0   -1.5709    0   0];
 end
