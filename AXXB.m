@@ -228,3 +228,78 @@ function T = cameraPose2T(pose)
     T = [R [x; y; z];
          0 0 0 1];
 end
+
+
+
+
+
+
+
+% ------------------------------------------------------------------------------------------
+
+function pose_robot = cageToRobotPose(pose_cage, X_bc, X_gc)
+    % pose_cage = [qx qy qz qw x y z]
+    % pose_robot = [tz ty tx x y z]
+
+    % 1) pose da cage -> matriz homogênea
+    Tcg = cameraPose2T(pose_cage);
+
+    % 2) converte do frame base_cage para base_robo
+    %    Tbg = X_bc * Tcg * inv(X_gc)
+    Tbg = X_bc * Tcg / X_gc;
+
+    % 3) matriz homogênea -> formato do robo [tz ty tx x y z]
+    pose_robot = T2robotPose(Tbg);
+end
+
+function pose = T2robotPose(T)
+    % Converte matriz homogênea para:
+    % pose = [tz ty tx x y z]
+    % assumindo R = Rz(tz) * Ry(ty) * Rx(tx)
+
+    R = T(1:3,1:3);
+    x = T(1,4);
+    y = T(2,4);
+    z = T(3,4);
+
+    % Extracao ZYX
+    % R(3,1) = -sin(ty)
+    if abs(R(3,1)) < 1 - 1e-10
+        ty = -asin(R(3,1));
+        tz = atan2(R(2,1), R(1,1));
+        tx = atan2(R(3,2), R(3,3));
+    else
+        % caso singular (gimbal lock)
+        ty = -asin(max(min(R(3,1),1),-1));
+
+        if R(3,1) <= -1 + 1e-10
+            % ty = +pi/2
+            ty = pi/2;
+            tz = atan2(-R(1,2), R(2,2));
+            tx = 0;
+        else
+            % ty = -pi/2
+            ty = -pi/2;
+            tz = atan2(-R(1,2), R(2,2));
+            tx = 0;
+        end
+    end
+
+    pose = [tz ty tx x y z];
+end
+
+%% ============================================
+% EXEMPLO DE USO
+% pose_cage = [rot_x rot_y rot_z rot_w X Y Z]
+%% ============================================
+
+N = size(cage_poses,1);
+
+for i = 1:N
+    pose = cage_poses(i,:);
+
+    pose_robot = cageToRobotPose(pose, X_bc_encontrado, X_gc_encontrado);
+
+    fprintf('Pose %d convertida:\n', i);
+    disp(pose_robot);
+end
