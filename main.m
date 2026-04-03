@@ -43,19 +43,6 @@ sub = ros2subscriber(rosNode, "/erreur_bras", "geometry_msgs/Transform", ...
 % sub = ros2subscriber(rosNode, "/object_positions", "geometry_msgs/Point", ...
 %     @(msg) storePointThrottled(msg));
 
-pub = ros2publisher(rosNode, ...
-    "/robot_pose", ...
-    "geometry_msgs/Transform");
-
-msg = ros2message(pub);
-
-timerObj = timer( ...
-    'ExecutionMode','fixedRate', ...
-    'Period',0.3, ... % 10 Hz
-    'TimerFcn',@(~,~) publishPose(ctx, pub));
-
-% start(timerObj);
-
 jointHome = [0   -1.5708   0   -1.5709    0   0]; %sendJointConfiguration(ctx.ur,jointHome,'EndTime',5);
 
 disp("Subscriber ready. Aceitando ponto novo a cada 3s.");
@@ -69,7 +56,7 @@ while true
     shared = evalin("base","shared");
 
     if isempty(shared.lastP)
-        disp("Ainda não tenho nenhum ponto (ou ainda não passou 3s).");
+        disp("Ainda não tenho nenhum ponto (ou ainda não passou 2s).");
         continue;
     end
 
@@ -113,11 +100,13 @@ function storePointThrottled(msg)
     if (t - shared.lastUpdate) < shared.throttle
         return; % ignora até completar 3s
     end
-
+    
+    %SUB CAGE
     x = msg.translation.x;
     y = msg.translation.y;
     z = msg.translation.z;
-    
+
+    %SUB CAMERA
     % x = msg.x;
     % y = msg.y;
     % z = msg.z;
@@ -129,30 +118,4 @@ function storePointThrottled(msg)
 
     disp("Ponto aceito (throttle 3s):");
     disp(shared.lastP);
-end
-
-% % ---------------- "CALLBACK" PUBLISHER----------------
-function publishPose(ctx, pub)
-
-    msg = ros2message(pub);
-
-    p = getCartesianPose(ctx.ur);
-
-    if numel(p) < 6
-        warning("Pose inválida (menos de 6 elementos)");
-        return;
-    end
-
-    % posição arredondada
-    msg.translation.x = round(p(4), 4);
-    msg.translation.y = round(p(5), 4);
-    msg.translation.z = round(p(6), 4);
-
-    quat = eul2quat([p(1) p(2) p(3)]);
-    msg.rotation.w = quat(1);
-    msg.rotation.x = quat(2);
-    msg.rotation.y = quat(3);
-    msg.rotation.z = quat(4);
-
-    send(pub, msg);
 end
