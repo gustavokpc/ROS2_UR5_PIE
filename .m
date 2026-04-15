@@ -36,7 +36,7 @@ tic; % relógio pra throttle
 % Subscriber: só armazena (com throttle de 3s)
 
 % SUB CAGE
-sub = ros2subscriber(rosNode, "/instruction_cage", "geometry_msgs/Transform", ...
+sub = ros2subscriber(rosNode, "/erreur_bras", "geometry_msgs/Transform", ...
     @(msg) storePointThrottled(msg));
 
 % %SUB CAMERA
@@ -67,14 +67,12 @@ while true
 
     shared.locked = true;
     assignin("base","shared",shared);
-    
-    p_robo = coordConvert(shared.lastP);
-    p_robo = p_robo(4:6);
 
+    p = shared.lastP;
     disp("Enviando robô para:");
-    disp(p_robo);
-    
-    [qSol, info] = computeIK_UR5(ctx, p_robo);
+    disp(p);
+
+    [qSol, info] = computeIK_UR5(ctx, p);
 
     if isfield(info,"ExitFlag") && info.ExitFlag <= 0
         disp("IK falhou. Não vou mandar comando.");
@@ -83,9 +81,9 @@ while true
         % DESCOMENTE para mover de verdade:
         sendJointConfigurationAndWait(ctx.ur, qSol, 'EndTime',10);
         pause(3); % teste
-        setToolOutput(ioClient, 1.0);
-        pause(2);
-        setToolOutput(ioClient, 0.0);
+        % setToolOutput(ioClient, 1.0);
+        % pause(2);
+        % setToolOutput(ioClient, 0.0);
 
     end
 
@@ -108,27 +106,16 @@ function storePointThrottled(msg)
     y = msg.translation.y;
     z = msg.translation.z;
 
-    qx = msg.rotation.x;
-    qy = msg.rotation.y;
-    qz = msg.rotation.z;
-    qw = msg.rotation.w;
-
     %SUB CAMERA
     % x = msg.x;
     % y = msg.y;
     % z = msg.z;
 
-    shared.lastP = [qx qy qz qw x y z];
+    shared.lastP = [x y z];
     shared.lastUpdate = t;
 
     assignin("base","shared",shared);
-    
-    
+
     disp("Ponto aceito (throttle 3s):");
     disp(shared.lastP);
-
-    disp("Ponto convertido")
-    p_robo = coordConvert(shared.lastP);
-    p_robo = p_robo(4:6);
-    disp(p_robo);
 end

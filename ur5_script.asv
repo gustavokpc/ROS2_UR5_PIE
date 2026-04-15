@@ -18,9 +18,9 @@ device.ROS2Workspace = ROS2Workspace;
 tcp = rigidBody('tcp');
 jnt = rigidBodyJoint('tcp_fixed','fixed');
 
-offset = trvec2tform([0 0 0.21]); % ajuste real
+% offset = trvec2tform([0 0 0.21]); % ajuste real
 
-% offset = trvec2tform([0 -0.025 0.15]); % ajuste real
+offset = trvec2tform([0 0 0.21]); % ajuste real
 setFixedTransform(jnt, offset);
 
 tcp.Joint = jnt;
