@@ -32,5 +32,7 @@ function ctx = setupUR5()
 
     % Parâmetros fixos
     ctx.eeName = "tcp";
-    ctx.weights = [1 1 1 1 1 1];
+    % ctx.weights = [1 1 1 1 1 1];
+
+    ctx.weights = [1 1 1 0.2 0.2 0.2];  % TESTE PARA SUAVIZAR MOVIMENTO
 end

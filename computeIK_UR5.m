@@ -27,7 +27,28 @@ function [qSol, info] = computeIK_UR5(ctx, p)
     catch
         q0 = homeConfiguration(ctx.ur5);
     end
-
+    
+    q0 = wrapToPi(q0);
     [qSol, info] = ctx.ik(ctx.eeName, T, ctx.weights, q0);
     qSol = wrapToPi(qSol);
+    bestSol = qSol;
+    % bestCost = norm(qSol(2) - q0(2));
+    bestCost = norm(qSol - q0);
+    
+    for k = 1:20
+        qTest = ctx.ik(ctx.eeName, T, ctx.weights, q0 + 0.2*randn(size(q0)));
+        qTest = wrapToPi(qTest);
+        % cost = norm(qTest(2) - q0(2));
+        cost = norm(qTest - q0);
+        
+        if cost < bestCost
+            bestSol = qTest;
+            bestCost = cost;
+        end
+    end
+
+    qSol = bestSol;
+
+    disp("Melhor solucao encontrada")
+    disp(qSol);
 end

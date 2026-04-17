@@ -20,6 +20,8 @@ while true
 
     publishPoseStamped(ctx, pub, rosNode);
 
+    disp(q);
+    
     pause(0.5); % ~2 Hz
 
 end
