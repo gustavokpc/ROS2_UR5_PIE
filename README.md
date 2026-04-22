@@ -32,7 +32,7 @@ It starts the UR driver and enables robot communication.
 
 ---
 
-## 🧠 SYSTEM OVERVIEW
+## SYSTEM OVERVIEW
 
 ### OPTION 1 — Full ROS2 Pipeline (Camera / Cage Control)
 
