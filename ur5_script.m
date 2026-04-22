@@ -1,6 +1,35 @@
+% =========================================================
+% DEBUG / IK TESTING SCRIPT FOR UR5 ROBOT
+% =========================================================
+%
+% This script sets up the UR5 robot model and ROS2 connection,
+% computes inverse kinematics (IK), and allows manual testing
+% of robot motion by sending joint configurations directly.
+%
+% It is mainly used for debugging and validation purposes:
+% - You can move the robot to any arbitrary Cartesian position
+%   by computing IK and sending qSol using sendJointConfiguration.
+% - Unlike the main pipeline, this script does NOT depend on
+%   cage or camera inputs.
+%
+% Typical workflow used in this script:
+% 1) Move robot to a known pose (or take current pose)
+% 2) Compute IK for that pose or a desired target
+% 3) Return robot to a home position
+% 4) Send robot back to the target using the computed joint angles
+%    (qSol) obtained from the IK solver
+%
+% This helps validate:
+% - IK solver behavior
+% - robot reachability
+% - motion correctness before integrating perception system
+
 clear;
+
+%% --- LOAD ROBOT MODEL ---
 ur5 = loadrobot('universalUR5');
 
+%% --- ROS2 / ROBOT CONNECTION CREDENTIALS ---
 username = 'student';
 password = 'student';
 
@@ -10,50 +39,60 @@ ROS2Workspace = '/opt/ros/humble';
 ROS2DeviceAddress = '147.250.35.73';
 robotAddress = '147.250.35.40'; 
 
+% Connect to ROS2-enabled robot device
 device = ros2device(ROS2DeviceAddress,username,password);
 device.ROS2Folder = ROS2Folder;
 device.ROS2Workspace = ROS2Workspace;
 
-%% --- TCP ---
+%% --- TOOL CENTER POINT (TCP) DEFINITION ---
 tcp = rigidBody('tcp');
 jnt = rigidBodyJoint('tcp_fixed','fixed');
 
-offset = trvec2tform([0 0 0.21]); % ajuste real
+% Offset from tool0 to the actual tool/gripper tip
+offset = trvec2tform([0 0 0.21]); % adjust based on real calibration
 
-% offset = trvec2tform([0 -0.025 0.15]); % ajuste real
+% Alternative offset (kept for reference)
+% offset = trvec2tform([0 -0.025 0.15]);
+
 setFixedTransform(jnt, offset);
 
 tcp.Joint = jnt;
 addBody(ur5, tcp, 'tool0');
 
-%% --- ROS2 node do robô ---
+%% --- ROS2 ROBOT INTERFACE NODE ---
 ur = urROS2Node('RigidBodyTree',ur5);
 
-%% --- Criar contexto para a função IK ---
+%% --- IK CONTEXT STRUCTURE ---
+% Structure used by computeIK_UR5()
+% Contains robot model, IK solver, weights, and end-effector name
 ctx.ur = ur;
 ctx.ur5 = ur5;
 ctx.eeName = "tcp";
-ctx.weights = [1 1 1 1 1 1];
+ctx.weights = [1 1 1 1 1 1]; % equal weighting for position and orientation
 ctx.ik = inverseKinematics("RigidBodyTree", ur5);
 
-jointHome = [0   -1.5708   0   -1.5709    0   0]; %sendJointConfiguration(ctx.ur,jointHome,'EndTime',5);
+%% --- OPTIONAL HOME POSITION ---
+jointHome = [0 -1.5708 0 -1.5709 0 0];
+% sendJointConfiguration(ctx.ur, jointHome, 'EndTime', 5);
 
-%% --- Ler pose atual ---
-p_robot = getCartesianPose(ur); % [thetaZ thetaY thetaX x y z]
+%% --- GET CURRENT ROBOT POSE ---
+% Pose format:
+% [thetaZ thetaY thetaX x y z]
+p_robot = getCartesianPose(ur);
 
+% Extract only Cartesian position [x y z]
 p_goal = p_robot(4:6);
 
-disp("Pose cartesiana atual (somente o ponto (xyz)):");
+disp("Current Cartesian position (x y z):");
 disp(p_goal);
 
-% %% --- Definir ponto alvo ---
-% p_target = [-0.7687    0.05    0.75]; % [x y z]
-
-%% --- Calcular IK usando sua função ---
+%% --- IK COMPUTATION (DEBUG TARGET) ---
+% Compute joint configuration for current or desired pose
 [qSol, info] = computeIK_UR5(ctx, p_goal);
 
-disp("Solução IK (rad):");
+disp("IK solution (radians):");
 disp(qSol);
 
-%% --- Enviar para o robô ---
+%% --- SEND TO ROBOT (OPTIONAL) ---
+% Copy and paste this command on command window
 % sendJointConfiguration(ur, qSol, 'EndTime',5);

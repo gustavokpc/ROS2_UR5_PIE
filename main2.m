@@ -1,143 +1,177 @@
 % export ROS_IP=147.250.35.73
 % export ROS_MASTER_URI=http://147.250.35.39
 
+% Generate ROS2 message interfaces from workspace
 folder = fullfile(getenv("HOME"), "pie_ws", "src");
 ros2genmsg(folder);
 savepath;
 rehash toolboxcache;
 
-% --- ENV ---
+% --- ROS ENVIRONMENT ---
 setenv('ROS_MASTER_URI','http://147.250.35.39')
 setenv('ROS_IP','147.250.35.73');
 setenv('ROS_DOMAIN_ID', '0');
 setenv('ROS_LOCALHOST_ONLY','0');
 
+% Initialize robot context (robot model, IK, ROS2 interface, etc.)
 ctx = setupUR5();
 
-% --- ROS2 node ---
+% --- ROS2 NODE ---
 rosNode = ros2node("/matlab_ur5_node");
 
-% --- Cliente para IO (Tool Output) ---
+% --- IO SERVICE CLIENT (gripper control) ---
 ioClient = ros2svcclient(rosNode, ...
     "/io_and_status_controller/set_io", ...
     "ur_msgs/SetIO");
 
-
+% Wait until ROS service becomes available
 waitForServer(ioClient);
 
-% --- Estado compartilhado ---
-shared.lastP = [];
-shared.lastUpdate = -inf;   % último instante que aceitou um ponto
-shared.throttle = 2.0;      % segundos
-shared.locked = false;      % evita mandar outro comando enquanto executa
+% --- SHARED STATE STRUCTURE ---
+% Used to communicate between subscriber callback and main loop
+shared.lastP = [];        % last accepted point [x y z]
+shared.lastUpdate = -inf; % timestamp of last accepted message
+shared.throttle = 2.0;    % minimum time between accepted messages (seconds)
+shared.locked = false;    % prevents sending multiple robot commands simultaneously
 
-tic; % relógio pra throttle
+tic; % timer used for throttling logic
 
-% Subscriber: só armazena (com throttle de 3s)
-
-% SUB CAGE
-sub = ros2subscriber(rosNode, "/instruction_cage", "geometry_msgs/Transform", ...
+% --- CAGE SUBSCRIBER ---
+sub = ros2subscriber(rosNode, "/instruction_cage", ...
+    "geometry_msgs/Transform", ...
     @(msg) storePointThrottled(ctx, msg));
 
-%SUB CAMERA
-% sub = ros2subscriber(rosNode, "/object_positions", "geometry_msgs/Point", ...
+% --- CAMERA SUBSCRIBER ---
+% sub = ros2subscriber(rosNode, "/object_positions", ...
+%     "geometry_msgs/Point", ...
 %     @(msg) storePointThrottled(msg));
 
-jointHome = [0   -1.5708   0   -1.5709    0   0]; %sendJointConfiguration(ctx.ur,jointHome,'EndTime',5);
+% Home joint configuration (optional reference position)
+jointHome = [0 -1.5708 0 -1.5709 0 0];  % sendJointConfiguration(ctx.ur, jointHome, 'EndTime', 5);
 
-disp("Subscriber ready. Aceitando ponto novo a cada 3s.");
-disp("Aperte Enter para enviar o robô ao último ponto aceito.");
+disp("Subscriber ready. Accepting new point every 3 seconds.");
+disp("Press Enter to send robot to last accepted point.");
 
-
+% =========================================================
+% MAIN CONTROL LOOP
+% =========================================================
 while true
-    % --- LOOP: manda só quando apertar Enter ---
-    input("Enter = enviar para o último ponto | Ctrl+C = sair ", "s");
 
+    % Wait for user trigger
+    input("Enter = send robot to last point | Ctrl+C = exit ", "s");
+
+    % Retrieve shared state from base workspace
     shared = evalin("base","shared");
 
+    % Check if any valid point exists
     if isempty(shared.lastP)
-        disp("Ainda não tenho nenhum ponto (ou ainda não passou 2s).");
+        disp("No valid point received yet (or still in throttle delay).");
         continue;
     end
 
+    % Check if robot is currently executing a command
     if shared.locked
-        disp("Robô ainda executando o último comando.");
+        disp("Robot is still executing previous command.");
         continue;
-
     end
 
+    % Lock execution to avoid concurrent commands
     shared.locked = true;
     assignin("base","shared",shared);
-    
-    p_robo = shared.lastP; % [x y z]
 
-    % direção radial (base -> ponto)
-    dir = p_robo(1:2) / norm(p_robo(1:2));
-    
-    % vetor 3D
+    % Target point [x y z]
+    p_goal = shared.lastP;
+
+    % Compute radial direction in XY plane (from base to point)
+    dir = p_goal(1:2) / norm(p_goal(1:2));
+
+    % Extend direction to 3D
     dir3 = [dir 0];
-    
-    % deslocamento (10 cm para trás)
-    d = 0.10;
-    p_novo = p_robo - d * dir3;
-    
-    % manter altura
-    p_novo(3) = p_robo(3);
 
-   
-    disp("Enviando robô para:");
-    disp(p_novo);
-    
-    [qSol, info] = computeIK_UR5(ctx, p_novo);
+    % Offset point 10 cm backwards from target
+    d = 0.10;
+    p_intermediate = p_goal - d * dir3;
+
+    % Keep original height
+    p_intermediate(3) = p_goal(3);
+
+    disp("Sending robot to intermediate point:");
+    disp(p_intermediate);
+
+    % Compute inverse kinematics for intermediate position
+    [qSol, info] = computeIK_UR5(ctx, p_intermediate);
 
     if isfield(info,"ExitFlag") && info.ExitFlag <= 0
-        disp("IK falhou. Não vou mandar comando.");
+        disp("IK failed. Command not sent.");
     else
+        % Move to intermediate position first
+        sendJointConfigurationAndWait(ctx.ur, qSol, 'EndTime', 10);
+        pause(2);
 
-        sendJointConfigurationAndWait(ctx.ur, qSol, 'EndTime',10);
-        pause(3);
-        [qSol, info] = computeIK_UR5(ctx, p_robo);
-        sendJointConfigurationAndWait(ctx.ur, qSol, 'EndTime',5);
-        pause(3); % teste
-        % setToolOutput(ioClient, 1.0);
-        % pause(2);
-        % setToolOutput(ioClient, 0.0);
+        % Compute IK for final target position
+        [qSol, info] = computeIK_UR5(ctx, p_goal);
+        sendJointConfigurationAndWait(ctx.ur, qSol, 'EndTime', 5);
+        pause(1);
 
+        % Optional gripper control (currently disabled)
+        % setToolOutput(ioClient, 1.0); % close gripper
+        % sendJointConfiguration(ctx.ur, jointHome, 'EndTime', 5); % go home
+        % pause(1);
+        % setToolOutput(ioClient, 0.0); % open gripper
     end
 
+    % Unlock robot after execution
     shared = evalin("base","shared");
     shared.locked = false;
     assignin("base","shared",shared);
+
 end
 
-% ---------------- CALLBACK SUBSCRIBER----------------
+% =========================================================
+% SUBSCRIBER CALLBACK FUNCTION
+% =========================================================
 function storePointThrottled(ctx, msg)
+
+    % Access shared state
     shared = evalin("base","shared");
+
+    % Current time (for throttle control)
     t = toc;
 
+    % Ignore messages if throttle time has not passed
     if (t - shared.lastUpdate) < shared.throttle
-        return; % ignora até completar 3s
+        return;
     end
-    
-    %SUB CAGE
+
+    % =====================================================
+    % CAGE INPUT FORMAT
+    % =====================================================
     x = msg.translation.x;
     y = msg.translation.y;
     z = msg.translation.z;
 
-    %SUB CAMERA
+    % =====================================================
+    % CAMERA INPUT FORMAT
+    % =====================================================
     % x = msg.x;
     % y = msg.y;
     % z = msg.z;
 
+    % Store latest valid point
     shared.lastP = [x y z];
 
+    % Update timestamp
     shared.lastUpdate = t;
 
+    % Save back to base workspace
     assignin("base","shared",shared);
-    
-    
-    disp("Ponto aceito (throttle 3s):");
+
+    disp("Point accepted (3s throttle):");
     disp(shared.lastP);
 
-    computeIK_UR5(ctx, shared.lastP);
+    % Optional: preview IK for debugging
+    disp("Best solution found:")
+    [qSol, info] = computeIK_UR5(ctx, shared.lastP);
+    disp(qSol);
+
 end

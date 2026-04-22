@@ -1,15 +1,14 @@
 clear; clc;
 
-X_gc_encontrado = [ 0.7329    0.6785    0.0499    0.0007
-                   -0.0454    0.1220   -0.9915   -0.0300
-                   -0.6788    0.7244    0.1202   -0.0309
-                    0         0         0         1.0000];
+X_gc_found = [ 0.7329    0.6785    0.0499    0.0007
+              -0.0454    0.1220   -0.9915   -0.0300
+              -0.6788    0.7244    0.1202   -0.0309
+               0         0         0         1.0000];
 
-X_bc_encontrado = [-0.0252    0.9996    0.0134    0.5261
-                   -0.9997   -0.0252   -0.0001   -0.2224
-                    0.0003   -0.0134    0.9999    0.3846
-                    0         0         0         1.0000];
-
+X_bc_found = [-0.0252    0.9996    0.0134    0.5261
+              -0.9997   -0.0252   -0.0001   -0.2224
+               0.0003   -0.0134    0.9999    0.3846
+               0         0         0         1.0000];
 
 % [tz ty tx x y z]
 robot_poses = [
@@ -61,11 +60,11 @@ cage_poses = [
   -0.013654 -0.201072 0.505480 -0.838972 0.849599 -0.373839 0.768409;
 ];
 
-%% Converte poses para matrizes homogêneas
+%% Convert poses to homogeneous matrices
 N = size(robot_poses,1);
 
-Tbg = zeros(4,4,N);   % base_robo -> gripper
-Tcg = zeros(4,4,N);   % base_cage -> gripper
+Tbg = zeros(4,4,N);   % robot_base -> gripper
+Tcg = zeros(4,4,N);   % cage_base -> gripper
 
 for i = 1:N
     Tbg(:,:,i) = robotPose2T(robot_poses(i,:));
@@ -73,14 +72,15 @@ for i = 1:N
 end
 
 %% ==========================================================
-% Resolve diretamente:
+% Solve:
 % Tbg(:,:,i) * X_gc = X_bc * Tcg(:,:,i)
 %
-% Parametros:
+% Parameters:
 % p = [rx_gc ry_gc rz_gc tx_gc ty_gc tz_gc rx_bc ry_bc rz_bc tx_bc ty_bc tz_bc]
 %
-% rotacao parametrizada por vetor de Rodrigues
+% Rotation parameterized with Rodrigues vector
 %% ==========================================================
+
 p0 = 0.1 * randn(12,1);
 
 options = optimset('Display','iter', ...
@@ -102,28 +102,28 @@ X_bc = vec2T(p(7:12));
 
 [pos_errors, rot_errors, score] = computeErrors(Tbg, Tcg, X_gc, X_bc);
 
-fprintf('\n=== ERROS ANTES DE REMOVER OUTLIERS ===\n');
+fprintf('\n=== ERRORS BEFORE REMOVING OUTLIERS ===\n');
 for i = 1:N
     fprintf('i=%02d | pos=%.6f m | rot=%.3f deg | score=%.3f\n', ...
         i, pos_errors(i), rot_errors(i), score(i));
 end
 
-fprintf('\nErro medio posicao: %.6f m\n', mean(pos_errors));
-fprintf('Erro maximo posicao: %.6f m\n', max(pos_errors));
-fprintf('Erro medio rotacao: %.6f graus\n', mean(rot_errors));
-fprintf('Erro maximo rotacao: %.6f graus\n', max(rot_errors));
+fprintf('\nMean position error: %.6f m\n', mean(pos_errors));
+fprintf('Max position error: %.6f m\n', max(pos_errors));
+fprintf('Mean rotation error: %.6f deg\n', mean(rot_errors));
+fprintf('Max rotation error: %.6f deg\n', max(rot_errors));
 
-% ========= DETECCAO DE INLIERS =========
+% ========= INLIER DETECTION =========
 idx_keep = findInliersMAD(score, 3.5);
 idx_out  = setdiff(1:N, idx_keep);
 
-fprintf('\nInliers mantidos:\n');
+fprintf('\nKept inliers:\n');
 disp(idx_keep);
 
-fprintf('Outliers removidos:\n');
+fprintf('Removed outliers:\n');
 disp(idx_out);
 
-% ========= RECALIBRACAO SEM OUTLIERS =========
+% ========= RE-CALIBRATION WITHOUT OUTLIERS =========
 Tbg_in = Tbg(:,:,idx_keep);
 Tcg_in = Tcg(:,:,idx_keep);
 
@@ -134,19 +134,19 @@ X_bc_refined = vec2T(p_refined(7:12));
 
 [pos_errors2, rot_errors2, score2] = computeErrors(Tbg_in, Tcg_in, X_gc_refined, X_bc_refined);
 
-fprintf('\n=== ERROS APOS REMOVER OUTLIERS ===\n');
-fprintf('Erro medio posicao: %.6f m\n', mean(pos_errors2));
-fprintf('Erro maximo posicao: %.6f m\n', max(pos_errors2));
-fprintf('Erro medio rotacao: %.6f graus\n', mean(rot_errors2));
-fprintf('Erro maximo rotacao: %.6f graus\n', max(rot_errors2));
+fprintf('\n=== ERRORS AFTER REMOVING OUTLIERS ===\n');
+fprintf('Mean position error: %.6f m\n', mean(pos_errors2));
+fprintf('Max position error: %.6f m\n', max(pos_errors2));
+fprintf('Mean rotation error: %.6f deg\n', mean(rot_errors2));
+fprintf('Max rotation error: %.6f deg\n', max(rot_errors2));
 
-disp('X_gc refinado:');
+disp('Refined X_gc:');
 disp(X_gc_refined);
 
-disp('X_bc refinado:');
+disp('Refined X_bc:');
 disp(X_bc_refined);
 
-%% Validacao
+%% Validation
 pos_errors = zeros(N,1);
 rot_errors = zeros(N,1);
 
@@ -164,13 +164,13 @@ for i = 1:N
     rot_errors(i) = rad2deg(ang);
 end
 
-fprintf('\nErro medio posicao: %.6f m\n', mean(pos_errors));
-fprintf('Erro maximo posicao: %.6f m\n', max(pos_errors));
-fprintf('Erro medio rotacao: %.6f graus\n', mean(rot_errors));
-fprintf('Erro maximo rotacao: %.6f graus\n', max(rot_errors));
+fprintf('\nMean position error: %.6f m\n', mean(pos_errors));
+fprintf('Max position error: %.6f m\n', max(pos_errors));
+fprintf('Mean rotation error: %.6f deg\n', mean(rot_errors));
+fprintf('Max rotation error: %.6f deg\n', max(rot_errors));
 
 %% =========================
-% FUNCOES AUXILIARES
+% AUXILIARY FUNCTIONS
 %% =========================
 
 function J = calibrationCost(p, Tbg, Tcg)
@@ -183,7 +183,7 @@ function J = calibrationCost(p, Tbg, Tcg)
     for i = 1:N
         E = Tbg(:,:,i) * X_gc - X_bc * Tcg(:,:,i);
 
-        % peso um pouco maior na translacao, mas sem exagerar
+        % Slightly higher weight on translation
         Er = E(1:3,1:3);
         Et = E(1:3,4);
 
@@ -191,198 +191,5 @@ function J = calibrationCost(p, Tbg, Tcg)
     end
 end
 
-function T = vec2T(v)
-    r = v(1:3);
-    t = v(4:6);
-
-    R = rodriguesToRotm(r);
-
-    T = eye(4);
-    T(1:3,1:3) = R;
-    T(1:3,4) = t;
-end
-
-function R = rodriguesToRotm(r)
-    theta = norm(r);
-
-    if theta < 1e-12
-        R = eye(3);
-        return;
-    end
-
-    k = r / theta;
-    K = skew3(k);
-
-    R = eye(3) + sin(theta)*K + (1-cos(theta))*(K*K);
-end
-
-function S = skew3(v)
-    S = [   0   -v(3)  v(2);
-          v(3)   0    -v(1);
-         -v(2) v(1)    0  ];
-end
-
 function T = robotPose2T(pose)
     % pose = [tz ty tx x y z]
-
-    tz = pose(1);
-    ty = pose(2);
-    tx = pose(3);
-    x  = pose(4);
-    y  = pose(5);
-    z  = pose(6);
-
-    Rz = [cos(tz) -sin(tz) 0;
-          sin(tz)  cos(tz) 0;
-             0        0    1];
-
-    Ry = [ cos(ty) 0 sin(ty);
-              0    1   0;
-          -sin(ty) 0 cos(ty)];
-
-    Rx = [1 0 0;
-          0 cos(tx) -sin(tx);
-          0 sin(tx)  cos(tx)];
-
-    R = Rz * Ry * Rx;
-
-    T = [R [x; y; z];
-         0 0 0 1];
-end
-
-function T = cameraPose2T(pose)
-    % pose = [qx qy qz qw x y z]
-
-    qx = pose(1);
-    qy = pose(2);
-    qz = pose(3);
-    qw = pose(4);
-    x  = pose(5);
-    y  = pose(6);
-    z  = pose(7);
-
-    q = [qw qx qy qz];
-    q = q / norm(q);
-
-    qw = q(1);
-    qx = q(2);
-    qy = q(3);
-    qz = q(4);
-
-    R = [1-2*(qy^2+qz^2),   2*(qx*qy-qz*qw),   2*(qx*qz+qy*qw);
-         2*(qx*qy+qz*qw), 1-2*(qx^2+qz^2),   2*(qy*qz-qx*qw);
-         2*(qx*qz-qy*qw),   2*(qy*qz+qx*qw), 1-2*(qx^2+qy^2)];
-
-    T = [R [x; y; z];
-         0 0 0 1];
-end
-
-
-
-
-
-
-
-% ------------------------------------------------------------------------------------------
-
-function pose_robot = cageToRobotPose(pose_cage, X_bc, X_gc)
-    % pose_cage = [qx qy qz qw x y z]
-    % pose_robot = [tz ty tx x y z]
-
-    % 1) pose da cage -> matriz homogênea
-    Tcg = cameraPose2T(pose_cage);
-
-    % 2) converte do frame base_cage para base_robo
-    %    Tbg = X_bc * Tcg * inv(X_gc)
-    Tbg = X_bc * Tcg / X_gc;
-
-    % 3) matriz homogênea -> formato do robo [tz ty tx x y z]
-    pose_robot = T2robotPose(Tbg);
-end
-
-function pose = T2robotPose(T)
-    % Converte matriz homogênea para:
-    % pose = [tz ty tx x y z]
-    % assumindo R = Rz(tz) * Ry(ty) * Rx(tx)
-
-    R = T(1:3,1:3);
-    x = T(1,4);
-    y = T(2,4);
-    z = T(3,4);
-
-    % Extracao ZYX
-    % R(3,1) = -sin(ty)
-    if abs(R(3,1)) < 1 - 1e-10
-        ty = -asin(R(3,1));
-        tz = atan2(R(2,1), R(1,1));
-        tx = atan2(R(3,2), R(3,3));
-    else
-        % caso singular (gimbal lock)
-        ty = -asin(max(min(R(3,1),1),-1));
-
-        if R(3,1) <= -1 + 1e-10
-            % ty = +pi/2
-            ty = pi/2;
-            tz = atan2(-R(1,2), R(2,2));
-            tx = 0;
-        else
-            % ty = -pi/2
-            ty = -pi/2;
-            tz = atan2(-R(1,2), R(2,2));
-            tx = 0;
-        end
-    end
-
-    pose = [tz ty tx x y z];
-end
-
-%% ============================================
-% EXEMPLO DE USO
-% pose_cage = [rot_x rot_y rot_z rot_w X Y Z]
-%% ============================================
-
-N = size(cage_poses,1);
-
-for i = 1:N
-    pose = cage_poses(i,:);
-
-    pose_robot = cageToRobotPose(pose, X_bc, X_gc);
-
-    fprintf('Pose %d convertida:\n', i);
-    disp(pose_robot);
-end
-
-
-function [pos_errors, rot_errors, score] = computeErrors(Tbg, Tcg, X_gc, X_bc)
-    N = size(Tbg,3);
-    pos_errors = zeros(N,1);
-    rot_errors = zeros(N,1);
-
-    for i = 1:N
-        T_est  = X_bc * Tcg(:,:,i) / X_gc;
-        T_real = Tbg(:,:,i);
-
-        dp = T_real(1:3,4) - T_est(1:3,4);
-        pos_errors(i) = norm(dp);
-
-        R_err = T_real(1:3,1:3) * T_est(1:3,1:3)';
-        ang = acos(max(min((trace(R_err)-1)/2,1),-1));
-        rot_errors(i) = rad2deg(ang);
-    end
-
-    % score combinado: 1 cm ~ 1 grau
-    score = pos_errors/0.01 + rot_errors/1.0;
-end
-
-function idx_keep = findInliersMAD(score, thr)
-    med_s = median(score);
-    mad_s = median(abs(score - med_s));
-
-    if mad_s < 1e-12
-        idx_keep = 1:length(score);
-        return;
-    end
-
-    z_rob = 0.6745 * (score - med_s) / mad_s;
-    idx_keep = find(abs(z_rob) <= thr);
-end
