@@ -105,7 +105,7 @@ while true
         disp("IK failed. Command not sent.");
     else
         % Move to intermediate position first
-        sendJointConfigurationAndWait(ctx.ur, qSol, 'EndTime', 10);
+        sendJointConfigurationAndWait(ctx.ur, qSol, 'EndTime', 5);
         pause(2);
 
         % Compute IK for final target position
